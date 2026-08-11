@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NVIDIA Inference Playground — current link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;650&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14171c;
+    --line: #242a32;
+    --text: #e6e9ee;
+    --dim: #98a1ae;
+    --accent: #34d399;
+    --warn: #e0a154;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  main {
+    width: 100%;
+    max-width: 560px;
+    padding: 32px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.45rem; font-weight: 650; letter-spacing: -0.015em; }
+  h1 .accent { color: var(--accent); }
+  .sub { margin: 0 0 24px; color: var(--dim); font-size: 0.95rem; }
+
+  a.open {
+    display: block;
+    padding: 14px 20px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #06231a;
+    font-weight: 650;
+    text-align: center;
+    text-decoration: none;
+  }
+  a.open:hover { filter: brightness(1.08); }
+  a.open[aria-disabled="true"] {
+    pointer-events: none;
+    background: #2a3038;
+    color: var(--dim);
+  }
+
+  .url {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #0e1115;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.82rem;
+    color: var(--dim);
+    word-break: break-all;
+  }
+  .meta { margin-top: 16px; font-size: 0.85rem; color: var(--dim); }
+  .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    margin-right: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    vertical-align: 1px;
+  }
+  .dot.stale { background: var(--warn); }
+  .dot.off { background: #6b7280; }
+  .note {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
+    color: var(--dim);
+  }
+  .note strong { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>NVIDIA <span class="accent">Inference</span> Playground</h1>
+  <p class="sub">The playground moves to a new address roughly once a week. This
+  page always points at the one that is live now.</p>
+
+  <a class="open" id="open" href="#" aria-disabled="true">Checking…</a>
+  <div class="url" id="url">—</div>
+  <p class="meta"><span class="dot off" id="dot"></span><span id="meta">Loading the current address…</span></p>
+
+  <p class="note"><strong>It asks for a password.</strong> That is deliberate —
+  the link is public but the playground runs on a private API key, so the
+  password is what stops the quota being spent by strangers. Ask whoever sent
+  you here for it.</p>
+</main>
+
+<script>
+// Cache-busted because a stale address is worse than a slow page: GitHub's
+// CDN will still hold its own copy for a few minutes, but at least the
+// browser is not adding to it.
+//
+// The timestamp says when the address was published, not when it was last
+// known good. A heartbeat would have to be committed to this repository to
+// be visible here, and once every few minutes forever is not a reasonable
+// thing to do to a git history.
+
+function ago(iso) {
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return `${Math.round(hours / 24)} days ago`;
+}
+
+function render(s) {
+  const open = document.getElementById("open");
+  const url = document.getElementById("url");
+  const meta = document.getElementById("meta");
+  const dot = document.getElementById("dot");
+
+  if (!s || !s.url) {
+    open.textContent = "Not running";
+    open.setAttribute("aria-disabled", "true");
+    url.textContent = "—";
+    dot.className = "dot off";
+    meta.textContent = s && s.updated
+      ? `Last seen ${ago(s.updated)}. It should be back shortly.`
+      : "No address has been published yet.";
+    return;
+  }
+
+  open.textContent = "Open the playground";
+  open.href = s.url;
+  open.removeAttribute("aria-disabled");
+  url.textContent = s.url;
+
+  dot.className = "dot";
+  meta.textContent = `Published ${ago(s.updated)}. ` +
+    "If it does not open, it has just moved — reload this page in a minute.";
+}
+
+fetch(`status.json?t=${Date.now()}`, { cache: "no-store" })
+  .then((r) => r.json())
+  .then(render)
+  .catch(() => {
+    document.getElementById("meta").textContent =
+      "Could not read the current address.";
+  });
+</script>
+</body>
+</html>
