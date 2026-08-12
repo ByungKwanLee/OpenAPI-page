@@ -29,15 +29,23 @@ this page and passed to people directly.
 
 ## Delay after a rotation
 
-Pages serves this directory from a CDN that holds a copy for ten minutes, so
-the `status.json` sitting next to `index.html` is the stale one. The page
-therefore reads it from `raw.githubusercontent.com` instead, which answers
-from the repository and is purged when the watchdog pushes; the local copy is
-only the fallback, for a network that blocks raw.
+The same `status.json` can be read three ways, and none is both fresh and
+free:
 
-Some delay is still possible, which is why the page offers a link to click
-rather than redirecting: a button that might be a minute out of date can say
-so, where a silent redirect just drops you on a dead page.
+| | how current | how often it can be asked |
+| --- | --- | --- |
+| `api.github.com` | immediately | 60 requests an hour per address |
+| `raw.githubusercontent.com` | up to 5 minutes behind | freely |
+| this directory, via Pages | up to 10 minutes behind | freely |
+
+Cache-busting does not rescue the middle one: the identical request comes back
+with a different age depending on which edge server answers. So the page uses
+the API where it has budget — on load, which is when someone has just started
+the playground and wants to see it — and raw for the polling in between.
+
+That is also why the page offers a link to click rather than redirecting: a
+button that might be a couple of minutes out of date can say so, where a
+silent redirect just drops you on a dead page.
 
 ## How it knows the playground has stopped
 

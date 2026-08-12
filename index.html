@@ -182,27 +182,54 @@ function render(s, live) {
   meta.textContent = `Published ${ago(s.updated)}, and answering just now.`;
 }
 
-// Two places hold the same file, and the nearer one is the slower. Pages
-// serves this directory from a CDN that holds a copy for ten minutes, so an
-// address published a minute ago is not here yet; raw.githubusercontent
-// answers from the repository, is purged when the watchdog pushes, and allows
-// cross-origin reads. It is tried first and the local copy is the fallback,
-// for a network that blocks raw or a moment when it is rate-limited.
-const SOURCES = [
-  "https://raw.githubusercontent.com/ByungKwanLee/OpenAPI-page/main/status.json",
-  "status.json",
-];
+// The same file sits in three places, and they trade freshness against how
+// often they can be asked.
+//
+//   the API   always current, but sixty requests an hour per address
+//   raw       a CDN copy, up to five minutes behind, free to poll
+//   local     served by Pages beside this file, up to ten minutes behind
+//
+// Cache-busting does not help with the middle one: the same request returns
+// different ages depending on which edge answers it. So the API is used when
+// there is budget for it -- on load, and once in a while after -- and raw
+// carries the frequent polling in between.
+const API =
+  "https://api.github.com/repos/ByungKwanLee/OpenAPI-page/contents/status.json";
+const RAW =
+  "https://raw.githubusercontent.com/ByungKwanLee/OpenAPI-page/main/status.json";
+
+const API_EVERY_MS = 120000;
+let lastApiCall = 0;
+
+async function fromApi() {
+  try {
+    const reply = await fetch(`${API}?ref=main&t=${Date.now()}`, { cache: "no-store" });
+    if (!reply.ok) return null;
+    const meta = await reply.json();
+    // Sent base64 rather than as the file, and asking for the file instead
+    // would need an Accept header, which would need a preflight.
+    return JSON.parse(atob(meta.content.replace(/\s/g, "")));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fromMirror(source) {
+  try {
+    const reply = await fetch(`${source}?t=${Date.now()}`, { cache: "no-store" });
+    return reply.ok ? await reply.json() : null;
+  } catch (e) {
+    return null;
+  }
+}
 
 async function current() {
-  for (const source of SOURCES) {
-    try {
-      const reply = await fetch(`${source}?t=${Date.now()}`, { cache: "no-store" });
-      if (reply.ok) return await reply.json();
-    } catch (e) {
-      /* try the next one */
-    }
+  if (Date.now() - lastApiCall >= API_EVERY_MS) {
+    lastApiCall = Date.now();
+    const fresh = await fromApi();
+    if (fresh) return fresh;
   }
-  return null;
+  return (await fromMirror(RAW)) || (await fromMirror("status.json"));
 }
 
 // Kept up to date without being reloaded. The address changes on its own, and
