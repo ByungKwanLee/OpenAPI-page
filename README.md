@@ -39,13 +39,16 @@ Some delay is still possible, which is why the page offers a link to click
 rather than redirecting: a button that might be a minute out of date can say
 so, where a silent redirect just drops you on a dead page.
 
-`status.json` carries two times. `updated` is when the address went up, which
-is what the page shows. `confirmed` is refreshed about once an hour while the
-watchdog is running, and exists for the case it cannot report itself: a daemon
-killed outright, or a machine that goes down, leaves whatever it last said
-standing. When `confirmed` falls far enough behind, the page stops offering
-the address rather than sending people to a link that can only fail.
+## How it knows the playground has stopped
 
-Hourly rather than by the minute, which would mean a commit here every minute
-forever.
+A watchdog shut down properly says so, and `status.json` goes to `offline`
+within seconds. One that is killed outright — or a machine that loses power —
+says nothing, and the last address it published would sit here looking live.
+
+So the page checks. Before offering the link it fetches it, which works
+because the two cases differ where a browser can see them: a live tunnel
+answers with an `access-control-allow-origin` header, and a subdomain that has
+been reclaimed answers 404 without one, so the fetch is refused. That makes
+the page correct the moment the tunnel goes, with no heartbeat to maintain and
+no commits to spend on one.
 

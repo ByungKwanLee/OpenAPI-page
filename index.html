@@ -112,12 +112,33 @@
 // CDN will still hold its own copy for a few minutes, but at least the
 // browser is not adding to it.
 //
-// `confirmed` is refreshed about once an hour while the watchdog is running.
-// That is the only way this page can tell a live address from one left behind
-// by a daemon that was killed outright and never got to say goodbye. Anything
-// older than the grace period below is treated as gone rather than offered as
-// a working link.
-const STALE_AFTER_MINUTES = 150;
+// The address is checked rather than taken on trust. A watchdog that is
+// killed outright never gets to say it has gone, so `confirmed` alone would
+// leave a dead link up until the next heartbeat -- an hour of pointing
+// nowhere.
+//
+// The check works because the two cases differ where a browser can see it: a
+// live tunnel answers 200 with an access-control-allow-origin header, and a
+// subdomain that has been reclaimed answers 404 without one. So a plain
+// cross-origin fetch resolves for the first and is refused for the second,
+// without needing to read anything out of the response.
+const REACHABLE_TIMEOUT_MS = 6000;
+
+async function reachable(url) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), REACHABLE_TIMEOUT_MS);
+    try {
+      await fetch(url, { method: "GET", signal: stop.signal, cache: "no-store" });
+      return true;
+    } catch (e) {
+      /* once more, in case it was the network rather than the tunnel */
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return false;
+}
 
 function ago(iso) {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
@@ -128,24 +149,22 @@ function ago(iso) {
   return `${Math.round(hours / 24)} days ago`;
 }
 
-function render(s) {
+function render(s, live) {
   const open = document.getElementById("open");
   const url = document.getElementById("url");
   const meta = document.getElementById("meta");
   const dot = document.getElementById("dot");
 
-  const stale = s && s.url && s.confirmed &&
-    (Date.now() - new Date(s.confirmed)) > STALE_AFTER_MINUTES * 60000;
-
-  if (!s || !s.url || stale) {
+  if (!s || !s.url || !live) {
     open.textContent = "Not running";
     open.setAttribute("aria-disabled", "true");
+    open.removeAttribute("href");
     url.textContent = "—";
     dot.className = "dot off";
-    if (stale) {
-      meta.textContent = `Last confirmed ${ago(s.confirmed)}, so the ` +
-        "playground has almost certainly stopped. The address it had is not " +
-        "shown, because it would only fail.";
+    if (s && s.url) {
+      meta.textContent = `The address published ${ago(s.updated)} no longer ` +
+        "answers, so the playground has stopped. It will be back at a new " +
+        "address; reload then.";
     } else {
       meta.textContent = s && s.updated
         ? `Last seen ${ago(s.updated)}. It should be back shortly.`
@@ -160,8 +179,7 @@ function render(s) {
   url.textContent = s.url;
 
   dot.className = "dot";
-  meta.textContent = `Published ${ago(s.updated)}. ` +
-    "If it does not open, it has just moved — reload this page in a minute.";
+  meta.textContent = `Published ${ago(s.updated)}, and answering just now.`;
 }
 
 // Two places hold the same file, and the nearer one is the slower. Pages
@@ -187,13 +205,18 @@ async function current() {
   return null;
 }
 
-current().then((status) => {
-  if (status) {
-    render(status);
-  } else {
+current().then(async (status) => {
+  if (!status) {
     document.getElementById("meta").textContent =
       "Could not read the current address.";
+    return;
   }
+  if (!status.url) {
+    render(status, false);
+    return;
+  }
+  document.getElementById("meta").textContent = "Checking that it answers…";
+  render(status, await reachable(status.url));
 });
 </script>
 </body>
