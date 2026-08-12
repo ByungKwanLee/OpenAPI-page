@@ -205,18 +205,36 @@ async function current() {
   return null;
 }
 
-current().then(async (status) => {
-  if (!status) {
-    document.getElementById("meta").textContent =
-      "Could not read the current address.";
-    return;
+// Kept up to date without being reloaded. The address changes on its own, and
+// the tunnel service drops requests often enough that a single failed check
+// would otherwise strand the page on "not running" until somebody thought to
+// press refresh -- which is what happened before this existed.
+const RECHECK_MS = 15000;
+
+let busy = false;
+
+async function refresh() {
+  if (busy || document.hidden) return;
+  busy = true;
+  try {
+    const status = await current();
+    if (!status) {
+      document.getElementById("meta").textContent =
+        "Could not read the current address.";
+      return;
+    }
+    render(status, status.url ? await reachable(status.url) : false);
+  } finally {
+    busy = false;
   }
-  if (!status.url) {
-    render(status, false);
-    return;
-  }
-  document.getElementById("meta").textContent = "Checking that it answers…";
-  render(status, await reachable(status.url));
+}
+
+refresh();
+setInterval(refresh, RECHECK_MS);
+// Coming back to a tab that has been open for hours should not show what was
+// true when it was last in front.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refresh();
 });
 </script>
 </body>
