@@ -29,11 +29,15 @@ this page and passed to people directly.
 
 ## Delay after a rotation
 
-GitHub Pages sits behind a CDN that holds a copy of these files for a few
-minutes, so a freshly published address can take that long to appear here.
-That is why the page offers a link to click rather than redirecting: a button
-that might be a minute stale can say so, where a silent redirect just drops
-you on a dead page.
+Pages serves this directory from a CDN that holds a copy for ten minutes, so
+the `status.json` sitting next to `index.html` is the stale one. The page
+therefore reads it from `raw.githubusercontent.com` instead, which answers
+from the repository and is purged when the watchdog pushes; the local copy is
+only the fallback, for a network that blocks raw.
+
+Some delay is still possible, which is why the page offers a link to click
+rather than redirecting: a button that might be a minute out of date can say
+so, where a silent redirect just drops you on a dead page.
 
 `status.json` carries two times. `updated` is when the address went up, which
 is what the page shows. `confirmed` is refreshed about once an hour while the

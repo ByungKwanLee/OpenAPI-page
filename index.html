@@ -164,13 +164,37 @@ function render(s) {
     "If it does not open, it has just moved — reload this page in a minute.";
 }
 
-fetch(`status.json?t=${Date.now()}`, { cache: "no-store" })
-  .then((r) => r.json())
-  .then(render)
-  .catch(() => {
+// Two places hold the same file, and the nearer one is the slower. Pages
+// serves this directory from a CDN that holds a copy for ten minutes, so an
+// address published a minute ago is not here yet; raw.githubusercontent
+// answers from the repository, is purged when the watchdog pushes, and allows
+// cross-origin reads. It is tried first and the local copy is the fallback,
+// for a network that blocks raw or a moment when it is rate-limited.
+const SOURCES = [
+  "https://raw.githubusercontent.com/ByungKwanLee/OpenAPI-page/main/status.json",
+  "status.json",
+];
+
+async function current() {
+  for (const source of SOURCES) {
+    try {
+      const reply = await fetch(`${source}?t=${Date.now()}`, { cache: "no-store" });
+      if (reply.ok) return await reply.json();
+    } catch (e) {
+      /* try the next one */
+    }
+  }
+  return null;
+}
+
+current().then((status) => {
+  if (status) {
+    render(status);
+  } else {
     document.getElementById("meta").textContent =
       "Could not read the current address.";
-  });
+  }
+});
 </script>
 </body>
 </html>
