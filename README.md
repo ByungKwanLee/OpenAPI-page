@@ -35,7 +35,13 @@ That is why the page offers a link to click rather than redirecting: a button
 that might be a minute stale can say so, where a silent redirect just drops
 you on a dead page.
 
-The timestamp is when the address was published, not a heartbeat. Showing
-"still alive as of a minute ago" would mean committing to this repository
-every minute forever, which is not a reasonable thing to do to a git history.
+`status.json` carries two times. `updated` is when the address went up, which
+is what the page shows. `confirmed` is refreshed about once an hour while the
+watchdog is running, and exists for the case it cannot report itself: a daemon
+killed outright, or a machine that goes down, leaves whatever it last said
+standing. When `confirmed` falls far enough behind, the page stops offering
+the address rather than sending people to a link that can only fail.
+
+Hourly rather than by the minute, which would mean a commit here every minute
+forever.
 

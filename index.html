@@ -112,10 +112,12 @@
 // CDN will still hold its own copy for a few minutes, but at least the
 // browser is not adding to it.
 //
-// The timestamp says when the address was published, not when it was last
-// known good. A heartbeat would have to be committed to this repository to
-// be visible here, and once every few minutes forever is not a reasonable
-// thing to do to a git history.
+// `confirmed` is refreshed about once an hour while the watchdog is running.
+// That is the only way this page can tell a live address from one left behind
+// by a daemon that was killed outright and never got to say goodbye. Anything
+// older than the grace period below is treated as gone rather than offered as
+// a working link.
+const STALE_AFTER_MINUTES = 150;
 
 function ago(iso) {
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
@@ -132,14 +134,23 @@ function render(s) {
   const meta = document.getElementById("meta");
   const dot = document.getElementById("dot");
 
-  if (!s || !s.url) {
+  const stale = s && s.url && s.confirmed &&
+    (Date.now() - new Date(s.confirmed)) > STALE_AFTER_MINUTES * 60000;
+
+  if (!s || !s.url || stale) {
     open.textContent = "Not running";
     open.setAttribute("aria-disabled", "true");
     url.textContent = "—";
     dot.className = "dot off";
-    meta.textContent = s && s.updated
-      ? `Last seen ${ago(s.updated)}. It should be back shortly.`
-      : "No address has been published yet.";
+    if (stale) {
+      meta.textContent = `Last confirmed ${ago(s.confirmed)}, so the ` +
+        "playground has almost certainly stopped. The address it had is not " +
+        "shown, because it would only fail.";
+    } else {
+      meta.textContent = s && s.updated
+        ? `Last seen ${ago(s.updated)}. It should be back shortly.`
+        : "No address has been published yet.";
+    }
     return;
   }
 
